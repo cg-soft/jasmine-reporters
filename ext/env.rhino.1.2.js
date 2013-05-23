@@ -6775,7 +6775,7 @@ __extend__(HTMLDocument.prototype, {
         //no head?  ugh bad news html.. I guess we'll force the issue?
         return element.appendChild(this.createElement('body'));
     },
-    set body(){console.log('set body');/**in firefox this is a benevolent do nothing*/},
+    set body(_){console.log('set body');/**in firefox this is a benevolent do nothing*/},
     get cookie(){
         return Envjs.getCookies(this.location+'');
     },
@@ -7096,7 +7096,7 @@ Aspect.around({
  *
  */
 
-/*
+/**
  *
  * @returns 'name' if the node has a appropriate name
  *          null if node does not have a name
