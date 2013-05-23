@@ -21,8 +21,33 @@ else {
         };
     };
 
-    for (i = 0, l = args.length; i < l; i++) {
-        address = args[i];
+    // go through args and figure out which are test runners and which are scripts
+    var tests = [];
+    var ctest = null;
+    for (var f = 0; f < args.length; ++f) {
+        if (args[f].match(/\.html$/)) {
+            if (ctest) {
+                tests.push(ctest);
+            }
+            ctest = {
+                html: args[f]
+            };
+        } else if (ctest && args[f].match(/\.js$/)) {
+            if (!ctest.scripts) {
+                ctest.scripts = [];
+            }
+            ctest.scripts.push(args[f]);
+        }
+    }
+
+    if (ctest) {
+        tests.push(ctest);
+        ctest = null;
+    }
+
+    for (i = 0, l = tests.length; i < l; i++) {
+        var test = tests[i];
+        address = test.html;
         console.log("Loading " + address);
 
         // if provided a url without a protocol, try to use file://
@@ -30,13 +55,39 @@ else {
 
         // create a WebPage object to work with
         page = require("webpage").create();
+
+        // set the page to its appropriate addr
         page.url = address;
 
         // When initialized, inject the reporting functions before the page is loaded
         // (and thus before it will try to utilize the functions)
         resultsKey = "__jr" + Math.ceil(Math.random() * 1000000);
-        page.onInitialized = setupPageFn(page, resultsKey);
+
+        //page.onInitialized = setupPageFn(page, resultsKey);
+        var sf = setupPageFn(page, resultsKey);
+
+        // set up script injection
+        var injected = false;
+        page.onInitialized = function () {
+            if (!injected) {
+                injected = true;
+                console.log("Loading scripts from " + page.libraryPath);
+                if (test.scripts && test.scripts.length) {
+                    for (var j = 0; j < test.scripts.length; ++j) {
+                        if (page.injectJs(test.scripts[j])) {
+                            console.log("included script " + test.scripts[j]);
+                        } else {
+                            console.log("failed to include " + test.scripts[j]);
+                        }
+                    }
+                }
+            }
+
+            sf.apply(this, arguments);
+        };
+
         page.open(address, processPage(null, page, resultsKey));
+
         pages.push(page);
 
         page.onConsoleMessage = logAndWorkAroundDefaultLineBreaking;
@@ -101,8 +152,10 @@ function replaceFunctionPlaceholders(fn, replacements) {
  * @param {phantomjs.WebPage} page The WebPage object to overload
  */
 function overloadPageEvaluate(page) {
-    page._evaluate = page.evaluate;
-    page.evaluate = function(fn, replacements) { return page._evaluate(replaceFunctionPlaceholders(fn, replacements)); };
+    if (!page._evaluate) {
+        page._evaluate = page.evaluate;
+        page.evaluate = function(fn, replacements) { return page._evaluate(replaceFunctionPlaceholders(fn, replacements)); };
+    }
     return page;
 }
 
